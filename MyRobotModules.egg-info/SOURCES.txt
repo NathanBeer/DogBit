@@ -1,0 +1,5 @@
+setup.py
+MyRobotModules.egg-info/PKG-INFO
+MyRobotModules.egg-info/SOURCES.txt
+MyRobotModules.egg-info/dependency_links.txt
+MyRobotModules.egg-info/top_level.txt
