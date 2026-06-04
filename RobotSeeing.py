@@ -1,6 +1,10 @@
 import cv2
 from ultralytics import YOLO
 
+def get_model_classes():
+    # If your model variable is named 'model', it should look like this:
+    return model.names.values()
+
 model = YOLO('yolov8n.pt')
 
 def get_frame():
