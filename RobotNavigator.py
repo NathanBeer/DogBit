@@ -1,11 +1,24 @@
-from pathfinding.core.grid import Grid
-from pathfinding.finder.a_star import AStarFinder
+import time
+import RobotMovement
+import RobotSeeing
 
-def get_path(start_pos, end_pos):
-    matrix = [[1 for _ in range(10)] for _ in range(10)]
-    grid = Grid(matrix=matrix)
-    start = grid.node(start_pos[0], start_pos[1])
-    end = grid.node(end_pos[0], end_pos[1])
-    finder = AStarFinder()
-    path, _ = finder.find_path(start, end, grid)
-    return path
+def perform_search_pattern(target_name, duration=15):
+    """
+    High-level behavior: Rotates and continuously checks for the object.
+    This is non-blocking to the main logic loop.
+    """
+    print(f"[Navigator] Scanning for {target_name}...")
+    start_time = time.time()
+    
+    # Start turning
+    RobotMovement.rotate(speed=30, direction="right")
+    
+    while time.time() - start_time < duration:
+        # Check camera WHILE turning
+        if RobotSeeing.look_for_object(target_name):
+            RobotMovement.safe_stop()
+            return True
+        time.sleep(0.1) # Prevents CPU hogging
+            
+    RobotMovement.safe_stop()
+    return False

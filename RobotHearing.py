@@ -1,27 +1,30 @@
 import speech_recognition as sr
-import time
+import whisper
+import os
 
-def get_voice_command(duration=4):
-    """Listens for voice input using the WM8960 soundcard."""
-    r = sr.Recognizer()
+# Load model outside the function to avoid re-loading
+print("[System] Loading Whisper model...")
+try:
+    model = whisper.load_model("tiny")
+except Exception as e:
+    print(f"[System] Error loading Whisper: {e}")
+    model = None
+
+def listen_for_command():
+    if not model: return ""
+    recognizer = sr.Recognizer()
+    mic = sr.Microphone()
     
-    # 16000Hz is the native sample rate for the WM8960 HAT
-    # Index 1 is standard for this HAT, but if it fails, check list_microphone_names()
-    mic = sr.Microphone(device_index=1, sample_rate=16000)
-    
-    try:
-        with mic as source:
-            r.adjust_for_ambient_noise(source, duration=0.5)
-            print(f"[Hearing] Listening for {duration} seconds...")
-            
-            # Timeout/phrase_time_limit prevents the hang
-            audio = r.listen(source, timeout=5, phrase_time_limit=duration)
-            
-            print("[Hearing] Transcribing...")
-            text = r.recognize_google(audio)
-            print(f"[Hearing] Captured: '{text}'")
-            return text.lower()
-            
-    except Exception as e:
-        # Return empty string on failure so main loop continues
-        return ""
+    with mic as source:
+        print("[Hearing] Listening...")
+        recognizer.adjust_for_ambient_noise(source, duration=0.5)
+        try:
+            audio = recognizer.listen(source, timeout=10, phrase_time_limit=5)
+            # Save to temporary file for Whisper
+            with open("input.wav", "wb") as f:
+                f.write(audio.get_wav_data())
+            result = model.transcribe("input.wav", fp16=False)
+            return result["text"].lower()
+        except Exception as e:
+            print(f"[Hearing] Error: {e}")
+            return ""

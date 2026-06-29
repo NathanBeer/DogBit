@@ -1,76 +1,73 @@
-import sys
-import os
-# Silence ALSA audio errors
-sys.stderr = open(os.devnull, 'w')
-
-import RobotHearing
+import threading
+import pyttsx3
 import RobotSeeing
+import RobotHearing
 import RobotMovement
 import RobotNavigator
-import time
-from gtts import gTTS
 
-def robot_speak(text):
-    print(f"[Voice] {text}")
-    tts = gTTS(text=text, lang='en')
-    tts.save("speech.mp3")
-    os.system("mpg123 -q speech.mp3")
+# Initialize TTS engine
+engine = pyttsx3.init()
+engine.setProperty('rate', 150) # Speed of speech
 
-def find_and_approach(target):
-    # 1. SEARCH: Rotate until object is in view
-    robot_speak(f"Searching for {target}.")
-    found = False
-    
-    # 360-degree search
-    for _ in range(360): 
-        if RobotSeeing.is_object_in_view(target):
-            found = True
-            break
-        RobotMovement.rotate_step() 
-        
-    if not found:
-        robot_speak("I could not find it.")
-        return False
-
-    # 2. APPROACH: Use A* Pathfinding
-    robot_speak("I found it. Calculating path. Bark bark!")
-    
-    # Get start (0,0) and target (from YOLO)
-    start_pos = (0, 0)
-    end_pos = RobotSeeing.get_coords(target) 
-    
-    path = RobotNavigator.get_path(start_pos, end_pos)
-    
-    # Follow the path steps
-    for step in path:
-        print(f"Moving to: {step}")
-        # RobotMovement.move_to(step) 
-        
-    robot_speak("We got to the destination, now give me a treat!")
-    return True
+def speak_async(text):
+    """Speaks text in a background thread so the robot stays responsive."""
+    def run_speak():
+        engine.say(text)
+        engine.runAndWait()
+    # Daemon thread ensures it closes when the program exits
+    threading.Thread(target=run_speak, daemon=True).start()
 
 def run_robot():
+    # 1. Initialization
+    RobotMovement.robot_init()
+    print("[System] Adjusting camera arm...")
+    RobotMovement.move_arm(1, 90)
+    RobotMovement.move_arm(2, 90)
+    
+    speak_async("Hello. Vision Dog is ready. What would you like me to find?")
+    
+    # 2. Main Interaction Loop
     while True:
-        robot_speak("What would you like me to find? Roof, roof")
-        command = RobotHearing.get_voice_command()
-        
-        # Match voice command to objects YOLO can see
-        target = RobotSeeing.match_target(command) 
+        command = RobotHearing.listen_for_command().lower()
+        if not command:
+            continue
+            
+        # Check if the requested object is in our known model classes
+        available_objects = [str(obj).lower() for obj in RobotSeeing.get_model_classes()]
+        target = next((obj for obj in available_objects if obj in command), None)
         
         if target:
-            find_and_approach(target)
+            speak_async(f"Searching for {target}")
             
-            # 3. LOOP: Anything else?
-            robot_speak("Is there anything else you would like me to find? Bark bark")
-            response = RobotHearing.get_voice_command()
-            
-            if "yes" in response.lower():
-                continue # Loops back to the start
+            # 3. Perform Search via Navigator
+            if RobotNavigator.perform_search_pattern(target):
+                speak_async(f"I found the {target}. Moving towards it.")
+                RobotMovement.move_forward(speed=50)
+                # Keep moving briefly then stop
+                import time
+                time.sleep(1.5)
+                RobotMovement.safe_stop()
+                speak_async("I have arrived.")
             else:
-                robot_speak("Goodnight!")
-                break # Shutdown
+                speak_async(f"I could not find the {target}.")
         else:
-            robot_speak("I didn't catch that.")
+            speak_async("I didn't recognize that object. Please try again.")
+            continue
+
+        # 4. Check for further instructions
+        speak_async("Is there anything else you would like me to find?")
+        next_command = RobotHearing.listen_for_command().lower()
+        
+        stop_words = ["no", "nothing", "that's it", "that's all", "stop", "goodbye"]
+        if any(word in next_command for word in stop_words):
+            speak_async("Shutting down. Goodbye.")
+            RobotMovement.move_arm(1, 0)
+            break
+        else:
+            speak_async("Understood, let's keep going.")
+            continue 
+
+    RobotSeeing.release_camera()
 
 if __name__ == "__main__":
     run_robot()

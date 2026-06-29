@@ -1,24 +1,22 @@
 import cv2
 from ultralytics import YOLO
 
-def get_model_classes():
-    # If your model variable is named 'model', it should look like this:
-    return model.names.values()
-
 model = YOLO('yolov8n.pt')
+# Use a default index if the URL is unreachable
+cap = cv2.VideoCapture("http://172.16.10.16:8080/video")
 
-def get_frame():
-    cap = cv2.VideoCapture(0)
+def look_for_object(target_name):
+    if not cap.isOpened():
+        print("[Seeing] Camera not connected!")
+        return False
+    
     ret, frame = cap.read()
-    cap.release()
-    return frame if ret else None
-
-def look_for_object_single_frame(target_name):
-    frame = get_frame()
-    if frame is None: return False
+    if not ret: return False
+    
     results = model(frame, verbose=False)
     for result in results:
         for box in result.boxes:
-            if model.names[int(box.cls[0])].lower() == target_name.lower():
+            name = model.names[int(box.cls[0])]
+            if target_name.lower() in name.lower():
                 return True
     return False

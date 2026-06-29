@@ -1,22 +1,30 @@
-from gpiozero import Robot
-from time import sleep
+import platform
 
-# Define the pins connected to your motor driver
-# Example: Left motor on pins 17/18, Right motor on 22/23
-dog_robot = Robot(left=(17, 18), right=(22, 23))
+class BluetoothController:
+    def __init__(self):
+        # Detect if we are on a Raspberry Pi
+        self.is_pi = platform.machine().startswith('arm')
+        if self.is_pi:
+            from BluetoothWorker import BluetoothController as ActualController
+            self.controller = ActualController()
+        else:
+            self.controller = None
+            print("[Mock] Bluetooth hardware disabled (Not on Pi).")
 
-def move_forward():
-    print("[Movement] Moving forward")
-    dog_robot.forward(speed=0.5) # Speed from 0.0 to 1.0
+    def send(self, packet):
+        if self.controller:
+            self.controller.send(packet)
+        else:
+            print(f"[Mock] Sent packet: {packet}")
 
-def stop():
-    print("[Movement] Stopping")
-    dog_robot.stop()
+controller = BluetoothController()
 
-def turn_left():
-    print("[Movement] Turning left")
-    dog_robot.left(speed=0.4)
+def rotate(speed=30, direction="right"):
+    val = 0x01 if direction == "right" else 0x02
+    controller.send([0x55, 0x00, 0x09, val, speed])
 
-def turn_right():
-    print("[Movement] Turning right")
-    dog_robot.right(speed=0.4)
+def move_forward(speed=50):
+    controller.send([0x55, 0x00, 0x09, 0x03, speed])
+
+def safe_stop():
+    controller.send([0x55, 0x00, 0x09, 0x00, 0x00])
